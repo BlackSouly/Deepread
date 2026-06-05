@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-brand-primary: #1d9e75;
+  --color-brand-deep: #085041;
+  --color-brand-light: #e1f5ee;
+  --color-brand-border: #9fe1cb;
+  --color-accent-warning: #d85a30;
+  --color-accent-warning-light: #faece7;
+  --color-accent-purple: #7f77dd;
+  --color-accent-purple-light: #eeedfe;
+  --color-accent-blue: #378add;
+  --color-accent-blue-light: #e6f1fb;
+  --color-accent-amber: #ef9f27;
+  --color-accent-amber-light: #faeeda;
+  --color-background-primary: #f7f8f6;
+  --color-background-secondary: #ffffff;
+  --color-background-tertiary: #f0f2ef;
+  --color-text-primary: #1c2521;
+  --color-text-secondary: #66736d;
+  --color-text-tertiary: #9aa39f;
+  --color-border-secondary: #dfe5e1;
+  --color-border-tertiary: #edf0ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+input,
+textarea,
+select {
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: var(--color-brand-border);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
