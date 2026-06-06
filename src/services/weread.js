@@ -2,6 +2,28 @@ function wait(ms = 500) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+const WEREAD_MODE = 'mock'
+
+export const WEREAD_CONNECTION_STATUS = {
+  connected: 'connected',
+  notConfigured: 'not_configured',
+  failed: 'failed',
+}
+
+function createConnectionStatus(status, detail) {
+  const labels = {
+    [WEREAD_CONNECTION_STATUS.connected]: '已连接',
+    [WEREAD_CONNECTION_STATUS.notConfigured]: '未配置',
+    [WEREAD_CONNECTION_STATUS.failed]: '连接失败',
+  }
+  return {
+    status,
+    label: labels[status],
+    mode: WEREAD_MODE,
+    detail,
+  }
+}
+
 function createCover(title, color) {
   const initials = title.slice(0, 4)
   const svg = `
@@ -95,7 +117,10 @@ export function mapWereadCategory(category) {
 export const wereadService = {
   async getConnectionStatus() {
     await wait(200)
-    return { status: 'connected', label: '已连接', detail: '当前使用微信读书 mock 数据，后续可替换为 WeRead MCP Server。' }
+    if (WEREAD_MODE === 'mock') {
+      return createConnectionStatus(WEREAD_CONNECTION_STATUS.connected, '当前使用微信读书 mock 数据，后续可替换为 WeRead MCP Server。')
+    }
+    return createConnectionStatus(WEREAD_CONNECTION_STATUS.notConfigured, '尚未配置 WeRead MCP Server。')
   },
 
   async getBookshelf() {

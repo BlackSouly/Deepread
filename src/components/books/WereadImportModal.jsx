@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { IconCheck, IconCloudDown, IconLoader2, IconSearch } from '@tabler/icons-react'
+import { IconAlertTriangle, IconCheck, IconCloudDown, IconLoader2, IconPlugConnected, IconRefresh, IconSearch, IconSettings } from '@tabler/icons-react'
 import { storage } from '../../services/storage.js'
-import { mapWereadCategory, wereadService } from '../../services/weread.js'
+import { mapWereadCategory, WEREAD_CONNECTION_STATUS, wereadService } from '../../services/weread.js'
 import { Button } from '../common/Button.jsx'
 import { Modal } from '../common/Modal.jsx'
 import { Badge } from '../common/Badge.jsx'
@@ -16,6 +16,11 @@ const filterOptions = [
 ]
 
 const inputClass = 'w-full rounded-lg border border-[var(--color-border-secondary)] bg-white px-3 py-2 text-[13px] outline-none'
+const connectionTone = {
+  [WEREAD_CONNECTION_STATUS.connected]: 'border-brand-200 bg-brand-50 text-brand-900',
+  [WEREAD_CONNECTION_STATUS.notConfigured]: 'border-[#F5C4B3] bg-signal-orangeLight text-signal-orange',
+  [WEREAD_CONNECTION_STATUS.failed]: 'border-[#F5C4B3] bg-white text-signal-orange',
+}
 
 function statusLabel(status) {
   if (status === 'reading') return '在读'
@@ -35,6 +40,12 @@ function createImportDraft(book) {
   }
 }
 
+function ConnectionIcon({ status }) {
+  if (status === WEREAD_CONNECTION_STATUS.connected) return <IconPlugConnected size={15} />
+  if (status === WEREAD_CONNECTION_STATUS.notConfigured) return <IconSettings size={15} />
+  return <IconAlertTriangle size={15} />
+}
+
 export function WereadImportModal({ onClose, onImported }) {
   const [step, setStep] = useState('select')
   const [connection, setConnection] = useState(null)
@@ -52,18 +63,35 @@ export function WereadImportModal({ onClose, onImported }) {
     [],
   )
 
+  async function loadBookshelf() {
+    try {
+      setLoading(true)
+      setSelectedIds([])
+      const nextConnection = await wereadService.getConnectionStatus()
+      setConnection(nextConnection)
+      if (nextConnection.status !== WEREAD_CONNECTION_STATUS.connected) {
+        setBookshelf([])
+        return
+      }
+      setBookshelf(await wereadService.getBookshelf())
+    } catch (error) {
+      setConnection({
+        status: WEREAD_CONNECTION_STATUS.failed,
+        label: '连接失败',
+        mode: 'mock',
+        detail: error instanceof Error ? error.message : '同步微信读书书架失败。',
+      })
+      setBookshelf([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     let active = true
     async function load() {
-      setLoading(true)
-      const [nextConnection, nextBookshelf] = await Promise.all([
-        wereadService.getConnectionStatus(),
-        wereadService.getBookshelf(),
-      ])
+      await loadBookshelf()
       if (!active) return
-      setConnection(nextConnection)
-      setBookshelf(nextBookshelf)
-      setLoading(false)
     }
     load()
     return () => {
@@ -168,59 +196,83 @@ export function WereadImportModal({ onClose, onImported }) {
         </div>
       ) : step === 'select' ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
+          <div className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 ${connectionTone[connection?.status] ?? connectionTone[WEREAD_CONNECTION_STATUS.failed]}`}>
             <div>
-              <div className="text-[12px] font-medium text-brand-900">连接状态：{connection?.label}</div>
-              <p className="mt-1 text-[11px] text-brand-900/80">{connection?.detail}</p>
+              <div className="flex items-center gap-1 text-[12px] font-medium">
+                <ConnectionIcon status={connection?.status} />
+                连接状态：{connection?.label}
+              </div>
+              <p className="mt-1 text-[11px] opacity-80">{connection?.detail}</p>
             </div>
-            <Badge tone="done"><IconCloudDown size={12} />Mock 同步</Badge>
+            <Badge tone={connection?.status === WEREAD_CONNECTION_STATUS.connected ? 'done' : 'warning'}>
+              <IconCloudDown size={12} />
+              {connection?.mode === 'mock' ? 'Mock 同步' : 'MCP 同步'}
+            </Badge>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-            <label className="relative block">
-              <IconSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
-              <input className={`${inputClass} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" />
-            </label>
-            <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              {filterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </div>
+          {connection?.status === WEREAD_CONNECTION_STATUS.connected ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-[1fr_180px]">
+                <label className="relative block">
+                  <IconSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
+                  <input className={`${inputClass} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" />
+                </label>
+                <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  {filterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
 
-          <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
-            {visibleBooks.map((book) => {
-              const selected = selectedIds.includes(book.id)
-              const alreadyImported = importedWereadIds.has(book.id)
-              return (
-                <button
-                  key={book.id}
-                  type="button"
-                  disabled={alreadyImported}
-                  className={`grid w-full grid-cols-[52px_1fr_auto] items-center gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed ${
-                    alreadyImported
-                      ? 'border-[var(--color-border-tertiary)] bg-[var(--color-background-secondary)] opacity-70'
-                      : selected
-                        ? 'border-brand-200 bg-brand-50'
-                        : 'border-[var(--color-border-tertiary)] bg-white hover:bg-[var(--color-background-secondary)]'
-                  }`}
-                  onClick={() => toggleBook(book.id)}
-                >
-                  <img src={book.cover} alt={book.title} className="h-16 w-12 rounded-md object-cover shadow-sm" />
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-medium">{book.title}</div>
-                    <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">{book.author}</div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Badge tone="neutral">{statusLabel(book.status)}</Badge>
-                      {alreadyImported ? <Badge tone="done">已导入</Badge> : null}
-                      <span className="text-[11px] text-[var(--color-text-tertiary)]">阅读进度 {book.progress}%</span>
-                    </div>
-                  </div>
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${selected ? 'border-brand-500 bg-brand-500 text-white' : alreadyImported ? 'border-brand-200 bg-brand-50 text-brand-900' : 'border-[var(--color-border-secondary)] text-transparent'}`}>
-                    <IconCheck size={15} />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+              <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
+                {visibleBooks.map((book) => {
+                  const selected = selectedIds.includes(book.id)
+                  const alreadyImported = importedWereadIds.has(book.id)
+                  return (
+                    <button
+                      key={book.id}
+                      type="button"
+                      disabled={alreadyImported}
+                      className={`grid w-full grid-cols-[52px_1fr_auto] items-center gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed ${
+                        alreadyImported
+                          ? 'border-[var(--color-border-tertiary)] bg-[var(--color-background-secondary)] opacity-70'
+                          : selected
+                            ? 'border-brand-200 bg-brand-50'
+                            : 'border-[var(--color-border-tertiary)] bg-white hover:bg-[var(--color-background-secondary)]'
+                      }`}
+                      onClick={() => toggleBook(book.id)}
+                    >
+                      <img src={book.cover} alt={book.title} className="h-16 w-12 rounded-md object-cover shadow-sm" />
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-medium">{book.title}</div>
+                        <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">{book.author}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Badge tone="neutral">{statusLabel(book.status)}</Badge>
+                          {alreadyImported ? <Badge tone="done">已导入</Badge> : null}
+                          <span className="text-[11px] text-[var(--color-text-tertiary)]">阅读进度 {book.progress}%</span>
+                        </div>
+                      </div>
+                      <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${selected ? 'border-brand-500 bg-brand-500 text-white' : alreadyImported ? 'border-brand-200 bg-brand-50 text-brand-900' : 'border-[var(--color-border-secondary)] text-transparent'}`}>
+                        <IconCheck size={15} />
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border-secondary)] bg-white px-6 text-center">
+              <ConnectionIcon status={connection?.status} />
+              <h3 className="mt-3 font-serif text-[18px] font-medium">{connection?.label}</h3>
+              <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--color-text-secondary)]">
+                {connection?.status === WEREAD_CONNECTION_STATUS.notConfigured
+                  ? '配置 WeRead MCP Server 后即可同步真实微信读书书架。当前深读基础功能和手动添加不受影响。'
+                  : '请检查 WeRead MCP Server 是否运行、账号是否已登录，或稍后重试。'}
+              </p>
+              <div className="mt-5 flex gap-2">
+                <Button variant="secondary" onClick={onClose}>改用手动添加</Button>
+                <Button onClick={loadBookshelf}><IconRefresh size={15} />重试连接</Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
             <Button variant="secondary" onClick={onClose}>取消</Button>
