@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { IconBook2, IconClockHour4, IconDeviceFloppy, IconEdit, IconExternalLink, IconLibraryPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { storage } from '../services/storage.js'
+import { WEREAD_CONNECTION_STATUS, wereadService } from '../services/weread.js'
 import { AddBookModal } from '../components/books/AddBookModal.jsx'
 import { Button } from '../components/common/Button.jsx'
 import { Badge } from '../components/common/Badge.jsx'
@@ -129,6 +130,7 @@ export function LibraryPage() {
   const [showAddBook, setShowAddBook] = useState(false)
   const [editingBook, setEditingBook] = useState(null)
   const [deletingBook, setDeletingBook] = useState(null)
+  const [syncingBookId, setSyncingBookId] = useState(null)
 
   const rows = useMemo(() => books.map((book) => {
     const chapters = storage.getChapters(book.id)
@@ -161,6 +163,26 @@ export function LibraryPage() {
     setEditingBook(null)
     refresh()
     showToast('书籍信息已保存。', 'success')
+  }
+
+  async function syncWereadProgress(book) {
+    if (!book.wereadId) return
+    try {
+      setSyncingBookId(book.id)
+      const connection = await wereadService.getConnectionStatus()
+      if (connection.status !== WEREAD_CONNECTION_STATUS.connected) {
+        showToast(`微信读书${connection.label}：${connection.detail}`, 'warning')
+        return
+      }
+      const progress = await wereadService.getReadingProgress(book.wereadId)
+      storage.saveBook({ ...book, wereadProgress: progress })
+      refresh()
+      showToast(`已同步「${book.title}」的微信读书进度：${progress}%。`, 'success')
+    } catch {
+      showToast('同步微信读书进度失败，请稍后重试。', 'error')
+    } finally {
+      setSyncingBookId(null)
+    }
   }
 
   return (
@@ -239,6 +261,17 @@ export function LibraryPage() {
                     <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-background-tertiary)]" onClick={() => setEditingBook(book)} aria-label="编辑书籍">
                       <IconEdit size={15} />
                     </button>
+                    {book.importedFrom === 'weread' ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-signal-blue hover:bg-signal-blueLight disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => syncWereadProgress(book)}
+                        disabled={syncingBookId === book.id}
+                        aria-label="同步微信读书进度"
+                      >
+                        <IconRefresh size={15} className={syncingBookId === book.id ? 'animate-spin' : ''} />
+                      </button>
+                    ) : null}
                     <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-signal-orange hover:bg-signal-orangeLight" onClick={() => setDeletingBook(book)} aria-label="删除书籍">
                       <IconTrash size={15} />
                     </button>
