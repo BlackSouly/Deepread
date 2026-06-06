@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { IconBook2, IconClockHour4, IconExternalLink, IconLibraryPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
+import { IconBook2, IconClockHour4, IconDeviceFloppy, IconEdit, IconExternalLink, IconLibraryPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { storage } from '../services/storage.js'
 import { AddBookModal } from '../components/books/AddBookModal.jsx'
 import { Button } from '../components/common/Button.jsx'
@@ -10,6 +10,10 @@ import { ProgressBar } from '../components/common/ProgressBar.jsx'
 import { useToast } from '../components/common/ToastProvider.jsx'
 import { formatMinutes, getBookChapterStats } from '../utils/bookMetrics.js'
 import { countDueReviews } from '../utils/reviewQueue.js'
+
+const bookTypes = ['工具书', '叙事', '理论', '其他']
+const inputClass = 'w-full rounded-lg border border-[var(--color-border-secondary)] bg-white px-3 py-2 text-[13px] outline-none'
+const libraryGridColumns = 'minmax(220px, 1.4fr) 120px 160px 150px 120px 110px'
 
 function formatDate(value) {
   if (!value) return '无记录'
@@ -33,8 +37,6 @@ function StatCard({ icon, label, value }) {
   )
 }
 
-const libraryGridColumns = 'minmax(220px, 1.4fr) 120px 160px 150px 120px 110px'
-
 function DeleteBookModal({ book, onCancel, onConfirm }) {
   return (
     <Modal title="删除书籍" onClose={onCancel}>
@@ -51,11 +53,81 @@ function DeleteBookModal({ book, onCancel, onConfirm }) {
   )
 }
 
+function EditBookModal({ book, onCancel, onSave }) {
+  const [form, setForm] = useState({
+    title: book.title ?? '',
+    author: book.author ?? '',
+    type: book.type ?? '工具书',
+    purpose: book.purpose ?? '',
+  })
+  const [submitted, setSubmitted] = useState(false)
+  const hasError = submitted && (!form.title.trim() || !form.purpose.trim())
+
+  function submit(event) {
+    event.preventDefault()
+    setSubmitted(true)
+    if (!form.title.trim() || !form.purpose.trim()) return
+    onSave({
+      ...book,
+      title: form.title.trim(),
+      author: form.author.trim(),
+      type: form.type,
+      purpose: form.purpose.trim(),
+    })
+  }
+
+  return (
+    <Modal title="编辑书籍信息" onClose={onCancel}>
+      <form className="space-y-4" onSubmit={submit}>
+        {hasError ? (
+          <div className="rounded-lg border border-[#F5C4B3] bg-signal-orangeLight px-3 py-2 text-[12px] text-signal-orange">
+            书名和阅读目的必须填写。
+          </div>
+        ) : null}
+        {book.importedFrom === 'weread' ? (
+          <div className="rounded-lg border border-[#B5D4F4] bg-signal-blueLight px-3 py-2 text-[12px] leading-5 text-signal-blue">
+            这本书来自微信读书。微信读书 ID、外部进度和来源分类会保留为同步信息；这里仅编辑深读平台内使用的基础信息。
+          </div>
+        ) : null}
+        <div className="grid gap-4 md:grid-cols-2">
+          <label>
+            <span className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">书名 <span className="text-signal-orange">*</span></span>
+            <input className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+          </label>
+          <label>
+            <span className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">作者</span>
+            <input className={inputClass} value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} />
+          </label>
+          <label>
+            <span className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">书籍类型</span>
+            <select className={inputClass} value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>
+              {bookTypes.map((type) => <option key={type}>{type}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">来源</span>
+            <input className={`${inputClass} bg-[var(--color-background-secondary)] text-[var(--color-text-tertiary)]`} value={book.importedFrom === 'weread' ? '微信读书' : '手动添加'} disabled />
+          </label>
+        </div>
+        <label className="block">
+          <span className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">阅读目的 <span className="text-signal-orange">*</span></span>
+          <textarea className={`${inputClass} min-h-28 resize-y`} value={form.purpose} onChange={(event) => setForm({ ...form, purpose: event.target.value })} />
+        </label>
+        <div className="flex justify-end gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
+          <Button variant="secondary" onClick={onCancel}>取消</Button>
+          <Button type="submit"><IconDeviceFloppy size={16} />保存信息</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export function LibraryPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [books, setBooks] = useState(() => storage.getBooks())
   const [showAddBook, setShowAddBook] = useState(false)
+  const [editingBook, setEditingBook] = useState(null)
   const [deletingBook, setDeletingBook] = useState(null)
 
   const rows = useMemo(() => books.map((book) => {
@@ -82,6 +154,13 @@ export function LibraryPage() {
     setDeletingBook(null)
     refresh()
     showToast('书籍已删除。', 'success')
+  }
+
+  function saveBook(book) {
+    storage.saveBook(book)
+    setEditingBook(null)
+    refresh()
+    showToast('书籍信息已保存。', 'success')
   }
 
   return (
@@ -157,6 +236,9 @@ export function LibraryPage() {
                         <IconExternalLink size={15} />
                       </button>
                     </Link>
+                    <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-background-tertiary)]" onClick={() => setEditingBook(book)} aria-label="编辑书籍">
+                      <IconEdit size={15} />
+                    </button>
                     <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-signal-orange hover:bg-signal-orangeLight" onClick={() => setDeletingBook(book)} aria-label="删除书籍">
                       <IconTrash size={15} />
                     </button>
@@ -178,6 +260,7 @@ export function LibraryPage() {
           }}
         />
       ) : null}
+      {editingBook ? <EditBookModal book={editingBook} onCancel={() => setEditingBook(null)} onSave={saveBook} /> : null}
       {deletingBook ? <DeleteBookModal book={deletingBook} onCancel={() => setDeletingBook(null)} onConfirm={deleteBook} /> : null}
     </div>
   )
