@@ -30,6 +30,7 @@ export function BookHeroCard({ book, chapters }) {
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-tertiary)]">
             <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 shadow-sm"><IconBook2 size={13} />书籍总览</span>
             <Badge tone="neutral">{book.type}</Badge>
+            {book.importedFrom === 'weread' ? <Badge tone="blue">微信读书 {book.wereadProgress ?? 0}%</Badge> : null}
           </div>
           <h1 className="mt-2 font-serif text-[24px] font-medium leading-tight">{book.title}</h1>
           <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">{book.author || '未填写作者'}</p>

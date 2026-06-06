@@ -30,6 +30,9 @@ export function BookCard({ book }) {
       <div className="p-4">
         <h2 className="line-clamp-2 font-serif text-[17px] font-medium leading-6 group-hover:text-brand-900">{book.title}</h2>
         <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">{book.author || '未填写作者'}</p>
+        {book.importedFrom === 'weread' ? (
+          <p className="mt-2 text-[11px] text-signal-blue">微信读书进度 {book.wereadProgress ?? 0}%</p>
+        ) : null}
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between text-[11px] text-[var(--color-text-secondary)]">
             <span>阅读进度</span>

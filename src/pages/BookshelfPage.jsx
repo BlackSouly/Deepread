@@ -6,6 +6,7 @@ import { Button } from '../components/common/Button.jsx'
 import { EmptyState } from '../components/common/EmptyState.jsx'
 import { BookCard } from '../components/books/BookCard.jsx'
 import { AddBookModal } from '../components/books/AddBookModal.jsx'
+import { WereadImportModal } from '../components/books/WereadImportModal.jsx'
 import { getBookChapterStats } from '../utils/bookMetrics.js'
 import { countDueReviews } from '../utils/reviewQueue.js'
 
@@ -25,6 +26,7 @@ export function BookshelfPage() {
   const navigate = useNavigate()
   const [books, setBooks] = useState(() => storage.getBooks())
   const [showAddBook, setShowAddBook] = useState(false)
+  const [showWereadImport, setShowWereadImport] = useState(false)
   const bookshelfStats = books.reduce((acc, book) => {
     const chapters = storage.getChapters(book.id)
     const chapterStats = getBookChapterStats(chapters)
@@ -48,6 +50,11 @@ export function BookshelfPage() {
     navigate(`/book/${bookId}`)
   }
 
+  function handleWereadImported() {
+    setShowWereadImport(false)
+    refreshBooks()
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <section className="overflow-hidden rounded-xl border border-[var(--color-border-tertiary)] bg-white shadow-card">
@@ -60,10 +67,16 @@ export function BookshelfPage() {
             <h1 className="mt-2 font-serif text-[22px] font-medium leading-tight">我的书架</h1>
             <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[var(--color-text-secondary)]">用结构化方法推进每一本书的深度阅读，把章节复述、总结和复习计划串成一条持续路径。</p>
           </div>
-          <Button onClick={() => setShowAddBook(true)}>
-            <IconPlus size={16} />
-            添加新书
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setShowWereadImport(true)}>
+              <IconBookUpload size={16} />
+              从微信读书导入
+            </Button>
+            <Button onClick={() => setShowAddBook(true)}>
+              <IconPlus size={16} />
+              手动添加
+            </Button>
+          </div>
         </div>
         <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
           <BookshelfStat icon={<IconBook2 size={14} />} label="书籍" value={`${books.length} 本`} />
@@ -96,6 +109,7 @@ export function BookshelfPage() {
       )}
 
       {showAddBook ? <AddBookModal onClose={() => setShowAddBook(false)} onCreated={handleCreated} /> : null}
+      {showWereadImport ? <WereadImportModal onClose={() => setShowWereadImport(false)} onImported={handleWereadImported} /> : null}
     </div>
   )
 }
