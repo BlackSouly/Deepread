@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { IconBook2, IconClockHour4, IconDeviceFloppy, IconEdit, IconExternalLink, IconLibraryPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
+import { IconBook2, IconClockHour4, IconDeviceFloppy, IconEdit, IconExternalLink, IconLibraryPlus, IconRefresh, IconSearch, IconTrash } from '@tabler/icons-react'
 import { storage } from '../services/storage.js'
 import { WEREAD_CONNECTION_STATUS, wereadService } from '../services/weread.js'
 import { AddBookModal } from '../components/books/AddBookModal.jsx'
@@ -13,6 +13,17 @@ import { formatMinutes, getBookChapterStats } from '../utils/bookMetrics.js'
 import { countDueReviews } from '../utils/reviewQueue.js'
 
 const bookTypes = ['工具书', '叙事', '理论', '其他']
+const sourceFilters = [
+  { value: 'all', label: '全部来源' },
+  { value: 'manual', label: '手动添加' },
+  { value: 'weread', label: '微信读书' },
+]
+const statusFilters = [
+  { value: 'all', label: '全部状态' },
+  { value: 'not_started', label: '未开始' },
+  { value: 'reading', label: '阅读中' },
+  { value: 'done', label: '已完成' },
+]
 const inputClass = 'w-full rounded-lg border border-[var(--color-border-secondary)] bg-white px-3 py-2 text-[13px] outline-none'
 const libraryGridColumns = 'minmax(220px, 1.4fr) 120px 160px 150px 120px 110px'
 
@@ -24,6 +35,12 @@ function formatDate(value) {
 function SourceBadge({ book }) {
   if (book.importedFrom === 'weread') return <Badge tone="blue">微信读书</Badge>
   return <Badge tone="neutral">手动添加</Badge>
+}
+
+function getLibraryStatus(chapterStats) {
+  if (chapterStats.requiredTotal === 0 || chapterStats.requiredDone === 0 && chapterStats.requiredReading === 0) return 'not_started'
+  if (chapterStats.requiredDone === chapterStats.requiredTotal) return 'done'
+  return 'reading'
 }
 
 function StatCard({ icon, label, value }) {
@@ -131,14 +148,28 @@ export function LibraryPage() {
   const [editingBook, setEditingBook] = useState(null)
   const [deletingBook, setDeletingBook] = useState(null)
   const [syncingBookId, setSyncingBookId] = useState(null)
+  const [query, setQuery] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const rows = useMemo(() => books.map((book) => {
     const chapters = storage.getChapters(book.id)
     const stats = storage.getReadingStats(book.id)
     const chapterStats = getBookChapterStats(chapters)
     const dueReviews = countDueReviews(storage.getReviewQueue(), (item) => item.bookId === book.id)
-    return { book, chapters, stats, chapterStats, dueReviews }
+    return { book, chapters, stats, chapterStats, dueReviews, libraryStatus: getLibraryStatus(chapterStats) }
   }), [books])
+
+  const visibleRows = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    return rows.filter(({ book, libraryStatus }) => {
+      const source = book.importedFrom === 'weread' ? 'weread' : 'manual'
+      const matchesSource = sourceFilter === 'all' || sourceFilter === source
+      const matchesStatus = statusFilter === 'all' || statusFilter === libraryStatus
+      const matchesQuery = !keyword || `${book.title} ${book.author ?? ''}`.toLowerCase().includes(keyword)
+      return matchesSource && matchesStatus && matchesQuery
+    })
+  }, [query, rows, sourceFilter, statusFilter])
 
   const totals = rows.reduce((acc, row) => ({
     books: acc.books + 1,
@@ -213,7 +244,20 @@ export function LibraryPage() {
             <h2 className="text-[13px] font-medium">全部书籍</h2>
             <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">删除操作会同步清理该书的阅读记录和复习数据。</p>
           </div>
-          <span className="rounded-full bg-[var(--color-background-secondary)] px-2.5 py-1 text-[11px] text-[var(--color-text-secondary)]">{rows.length} 本</span>
+          <span className="rounded-full bg-[var(--color-background-secondary)] px-2.5 py-1 text-[11px] text-[var(--color-text-secondary)]">{visibleRows.length}/{rows.length} 本</span>
+        </div>
+
+        <div className="mb-4 grid gap-3 md:grid-cols-[1fr_160px_160px]">
+          <label className="relative block">
+            <IconSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
+            <input className={`${inputClass} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" />
+          </label>
+          <select className={inputClass} value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+            {sourceFilters.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            {statusFilters.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
         </div>
 
         {rows.length === 0 ? (
@@ -222,6 +266,12 @@ export function LibraryPage() {
             <h3 className="mt-3 font-serif text-[18px] font-medium">还没有书籍</h3>
             <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">添加一本书后，这里会显示完整管理列表。</p>
             <Button className="mt-5" onClick={() => setShowAddBook(true)}>添加新书</Button>
+          </div>
+        ) : visibleRows.length === 0 ? (
+          <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border-secondary)] bg-white px-8 text-center">
+            <IconSearch size={24} className="text-[var(--color-text-tertiary)]" />
+            <h3 className="mt-3 font-serif text-[18px] font-medium">没有匹配的书籍</h3>
+            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">调整搜索词、来源或状态筛选后再试。</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-[var(--color-border-tertiary)]">
@@ -234,7 +284,7 @@ export function LibraryPage() {
               <span className="text-right">操作</span>
             </div>
             <div className="divide-y divide-[var(--color-border-tertiary)]">
-              {rows.map(({ book, chapterStats, dueReviews }) => (
+              {visibleRows.map(({ book, chapterStats, dueReviews }) => (
                 <div key={book.id} className="grid items-center gap-3 px-4 py-3 text-[12px]" style={{ gridTemplateColumns: libraryGridColumns }}>
                   <Link to={`/book/${book.id}`} className="min-w-0">
                     <div className="truncate font-medium">{book.title}</div>

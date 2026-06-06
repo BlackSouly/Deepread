@@ -181,10 +181,10 @@ export function WereadImportModal({ onClose, onImported }) {
       return
     }
     setSubmitting(true)
-    importableBooks.forEach((book) => createBookFromWeread(book, drafts[book.id]))
+    const importedBooks = importableBooks.map((book) => createBookFromWeread(book, drafts[book.id]))
     showToast(`已从微信读书导入 ${importableBooks.length} 本书。`, 'success')
     setSubmitting(false)
-    onImported()
+    onImported(importedBooks)
   }
 
   return (

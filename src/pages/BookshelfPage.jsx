@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { IconBook2, IconBookUpload, IconClockHour4, IconPlus, IconRefresh } from '@tabler/icons-react'
+import { Link } from 'react-router-dom'
+import { IconBook2, IconBookUpload, IconCheck, IconClockHour4, IconExternalLink, IconPlus, IconRefresh } from '@tabler/icons-react'
 import { storage } from '../services/storage.js'
 import { Button } from '../components/common/Button.jsx'
 import { EmptyState } from '../components/common/EmptyState.jsx'
@@ -27,6 +28,7 @@ export function BookshelfPage() {
   const [books, setBooks] = useState(() => storage.getBooks())
   const [showAddBook, setShowAddBook] = useState(false)
   const [showWereadImport, setShowWereadImport] = useState(false)
+  const [importedBooks, setImportedBooks] = useState([])
   const bookshelfStats = books.reduce((acc, book) => {
     const chapters = storage.getChapters(book.id)
     const chapterStats = getBookChapterStats(chapters)
@@ -50,8 +52,9 @@ export function BookshelfPage() {
     navigate(`/book/${bookId}`)
   }
 
-  function handleWereadImported() {
+  function handleWereadImported(nextImportedBooks = []) {
     setShowWereadImport(false)
+    setImportedBooks(nextImportedBooks)
     refreshBooks()
   }
 
@@ -85,6 +88,28 @@ export function BookshelfPage() {
           <BookshelfStat icon={<IconRefresh size={14} />} label="今日复习" value={`${dueReviewCount} 条`} />
         </div>
       </section>
+
+      {importedBooks.length > 0 ? (
+        <section className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-[13px] font-medium text-brand-900">
+                <IconCheck size={16} />
+                已从微信读书导入 {importedBooks.length} 本书
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {importedBooks.map((book) => (
+                  <Link key={book.id} to={`/book/${book.id}`} className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] text-brand-900">
+                    {book.title}
+                    <IconExternalLink size={12} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+            <button type="button" className="text-[11px] text-brand-900 hover:underline" onClick={() => setImportedBooks([])}>收起</button>
+          </div>
+        </section>
+      ) : null}
 
       {books.length === 0 ? (
         <EmptyState
