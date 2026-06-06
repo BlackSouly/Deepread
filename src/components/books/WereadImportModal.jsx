@@ -47,6 +47,10 @@ export function WereadImportModal({ onClose, onImported }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const { showToast } = useToast()
+  const importedWereadIds = useMemo(
+    () => new Set(storage.getBooks().map((book) => book.wereadId).filter(Boolean)),
+    [],
+  )
 
   useEffect(() => {
     let active = true
@@ -80,6 +84,7 @@ export function WereadImportModal({ onClose, onImported }) {
   const hasDraftErrors = submitted && selectedBooks.some((book) => !drafts[book.id]?.purpose?.trim())
 
   function toggleBook(bookId) {
+    if (importedWereadIds.has(bookId)) return
     setSelectedIds((current) => current.includes(bookId) ? current.filter((id) => id !== bookId) : [...current, bookId])
   }
 
@@ -102,6 +107,9 @@ export function WereadImportModal({ onClose, onImported }) {
   }
 
   function createBookFromWeread(book, draft) {
+    const existingBook = storage.getBooks().find((item) => item.wereadId === book.id)
+    if (existingBook) return existingBook
+
     const chapterTitles = draft.chaptersText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
     const savedBook = storage.saveBook({
       title: book.title,
@@ -139,9 +147,14 @@ export function WereadImportModal({ onClose, onImported }) {
     event.preventDefault()
     setSubmitted(true)
     if (selectedBooks.some((book) => !drafts[book.id]?.purpose?.trim())) return
+    const importableBooks = selectedBooks.filter((book) => !storage.getBooks().some((item) => item.wereadId === book.id))
+    if (importableBooks.length === 0) {
+      showToast('所选书籍已经导入，无需重复导入。', 'warning')
+      return
+    }
     setSubmitting(true)
-    selectedBooks.forEach((book) => createBookFromWeread(book, drafts[book.id]))
-    showToast(`已从微信读书导入 ${selectedBooks.length} 本书。`, 'success')
+    importableBooks.forEach((book) => createBookFromWeread(book, drafts[book.id]))
+    showToast(`已从微信读书导入 ${importableBooks.length} 本书。`, 'success')
     setSubmitting(false)
     onImported()
   }
@@ -176,11 +189,19 @@ export function WereadImportModal({ onClose, onImported }) {
           <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
             {visibleBooks.map((book) => {
               const selected = selectedIds.includes(book.id)
+              const alreadyImported = importedWereadIds.has(book.id)
               return (
                 <button
                   key={book.id}
                   type="button"
-                  className={`grid w-full grid-cols-[52px_1fr_auto] items-center gap-3 rounded-lg border p-3 text-left transition ${selected ? 'border-brand-200 bg-brand-50' : 'border-[var(--color-border-tertiary)] bg-white hover:bg-[var(--color-background-secondary)]'}`}
+                  disabled={alreadyImported}
+                  className={`grid w-full grid-cols-[52px_1fr_auto] items-center gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed ${
+                    alreadyImported
+                      ? 'border-[var(--color-border-tertiary)] bg-[var(--color-background-secondary)] opacity-70'
+                      : selected
+                        ? 'border-brand-200 bg-brand-50'
+                        : 'border-[var(--color-border-tertiary)] bg-white hover:bg-[var(--color-background-secondary)]'
+                  }`}
                   onClick={() => toggleBook(book.id)}
                 >
                   <img src={book.cover} alt={book.title} className="h-16 w-12 rounded-md object-cover shadow-sm" />
@@ -189,10 +210,11 @@ export function WereadImportModal({ onClose, onImported }) {
                     <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">{book.author}</div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Badge tone="neutral">{statusLabel(book.status)}</Badge>
+                      {alreadyImported ? <Badge tone="done">已导入</Badge> : null}
                       <span className="text-[11px] text-[var(--color-text-tertiary)]">阅读进度 {book.progress}%</span>
                     </div>
                   </div>
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${selected ? 'border-brand-500 bg-brand-500 text-white' : 'border-[var(--color-border-secondary)] text-transparent'}`}>
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${selected ? 'border-brand-500 bg-brand-500 text-white' : alreadyImported ? 'border-brand-200 bg-brand-50 text-brand-900' : 'border-[var(--color-border-secondary)] text-transparent'}`}>
                     <IconCheck size={15} />
                   </span>
                 </button>
@@ -214,6 +236,10 @@ export function WereadImportModal({ onClose, onImported }) {
               每本导入书籍都必须填写阅读目的。
             </div>
           ) : null}
+
+          <div className="rounded-lg border border-[#B5D4F4] bg-signal-blueLight px-3 py-2 text-[12px] leading-5 text-signal-blue">
+            微信读书进度会作为外部参考展示；深读平台内的章节完成、星级和复习计划仍由你在阅读流程中独立维护。
+          </div>
 
           <div className="max-h-[500px] space-y-4 overflow-auto pr-1">
             {selectedBooks.map((book) => {
